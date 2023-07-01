@@ -1,5 +1,8 @@
+import re
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, text
 from pymongo import MongoClient
+import redis
+
 
 class DatabaseConnection:
     def __init__(self, db_type, db_name):
@@ -11,7 +14,7 @@ class DatabaseConnection:
                 'host': 'localhost',
                 'port': 3306,
                 'user': 'root',
-                'password': 'password'
+                'password': '12345678'
             },
             'postgresql': {
                 'driver': 'postgresql+psycopg2',
@@ -65,21 +68,57 @@ class DatabaseConnection:
                 if not exists:
                     connection.execute(text(f"CREATE DATABASE {self.db_name}" if self.db_type == 'postgresql' else f"CREATE DATABASE IF NOT EXISTS {self.db_name}"))
 
-    def create_import_collection(self):
-        if self.db_type == 'mongodb':
-            self.collection = self.db['import']
-            return
-
+    def create_import_table(self):
         import_table = Table('import', self.metadata,
                              Column('id', Integer, primary_key=True),
-                             Column('data', String(255)))
-        import_table.create(self.engine)
+                             Column('ip_address', String(255)),
+                             Column('forwarded_for', String(255)),
+                             Column('timestamp', String(255)),
+                             Column('request', String(255)),
+                             Column('status_code', Integer),
+                             Column('response_size', Integer),
+                             Column('time_taken', Integer),
+                             Column('referer', String(255)),
+                             Column('user_agent', String(255)),
+                             Column('balancer_worker_name', String(255)))
 
-    def insert_document(self, data):
-        if self.db_type == 'mongodb':
-            self.collection.insert_one(data)
+        import_table_exists = self.engine.has_table('import')
+
+        if not import_table_exists:
+            import_table.create(self.engine)
         else:
-            raise NotImplementedError("Insert operation is not supported for this database type.")
+            # Очистка таблицы перед импортом данных
+            self.engine.execute(import_table.delete())
+
+    def import_log_data(self, log_file):
+        regex = r'^(?P<ip_address>\S+) \((?P<forwarded_for>\S+)\) - - \[(?P<timestamp>[\w:/]+\s[+\-]\d{4})\] "(?P<request>[A-Z]+ \S+ \S+)" (?P<status_code>\d+) (?P<response_size>\d+) (?P<time_taken>\d+) (?P<balancer_worker_name>\d+) "(?P<Referer>[^"]*)" "(?P<user_agent>[^"]*)"'
+        pattern = re.compile(regex)
+
+        if self.db_type == 'mongodb':
+            self.collection = self.db['import']
+            with open(log_file, 'r') as file:
+                for line in file:
+                    match = pattern.match(line)
+                    if match:
+                        data = match.groupdict()
+                        self.collection.insert_one(data)
+        elif self.db_type == 'redis':
+            r = redis.Redis(host=self.db_params['redis']['host'], port=self.db_params['redis']['port'])
+            with open(log_file, 'r') as file:
+                for line in file:
+                    match = pattern.match(line)
+                    if match:
+                        data = match.groupdict()
+                        r.hmset('import', data)
+        else:
+            self.create_import_table()
+
+            with open(log_file, 'r') as file:
+                for line in file:
+                    match = pattern.match(line)
+                    if match:
+                        data = match.groupdict()
+                        self.engine.execute(self.metadata.tables['import'].insert().values(data))
 
     def close(self):
         if self.db_type == 'mongodb':
@@ -87,16 +126,13 @@ class DatabaseConnection:
         else:
             self.engine.dispose()
 
+
 # Пример использования класса
-db_type = 'h2'
+db_type = 'mysql'
 db_name = 'mydatabase'
 
 db_connection = DatabaseConnection(db_type, db_name)
 db_connection.connect()
-db_connection.create_import_collection()
-
-# Вставка документа в MongoDB
-data = {'name': 'John Doe', 'age': 30}
-db_connection.insert_document(data)
+db_connection.import_log_data('access_log')
 
 db_connection.close()

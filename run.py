@@ -137,6 +137,7 @@ class DatabaseConnection:
             with self.engine.connect() as connection:
                 import_table = self.metadata.tables['import']  # Получаем объект таблицы Import
                 with open(log_file, 'r') as file:
+                    values_list = []  # Store the values to be inserted
                     for line in file:
                         match = pattern.match(line)
                         if match:
@@ -153,10 +154,12 @@ class DatabaseConnection:
                                             value = str(value)
                                         # Добавить преобразованное значение в словарь
                                         values[column_obj] = value
-                                connection.execute(import_table.insert().values(values))
-                                connection.commit()
+                                values_list.append(values)
                             except Exception as e:
                                 print(f"An error occurred: {e}")
+
+                    connection.execute(import_table.insert().values(values_list))
+                    connection.commit()
     def close(self):
         if self.db_type == 'mongodb':
             self.db.client.close()

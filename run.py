@@ -2,6 +2,7 @@
 from sqlalchemy import Boolean, create_engine, MetaData, Table, Column, Integer, String, Text, text
 from sqlalchemy.inspection import inspect
 from sqlalchemy import quoted_name
+from sqlalchemy import insert
 from pymongo import MongoClient
 import redis
 import re
@@ -93,13 +94,13 @@ class DatabaseConnection:
                             Column('ip_address', Text(length=50), nullable=True),
                             Column('forwarded_for', Text(length=3000), nullable=True),
                             Column('timestamp', Text(length=1000), nullable=True),
-                            Column('request', Text(length=5000), nullable=True),
+                            Column('request', Text(length=1000), nullable=True),
                             Column('status_code', Integer),
                             Column('response_size', Integer),
-                            Column('time_taken', Integer),
-                            Column(quoted_name('avb', quote=True), Text(length=5000),nullable=True),
-                            Column('user_agent', Text(length=5000), nullable=True),
-                            Column('balancer_worker_name', Text(length=5000), nullable=True))
+                            Column('time_taken', Text(length=50), nullable=True),
+                            Column('avb', Text(length=1000), nullable=True),
+                            Column('user_agent', Text(length=1000), nullable=True),
+                            Column('balancer_worker_name', Text(length=100), nullable=True))
 
         with self.engine.connect() as connection:
             # Выбор базы данных
@@ -135,9 +136,10 @@ class DatabaseConnection:
         else:
             self.create_import_table()
             with self.engine.connect() as connection:
-                import_table = self.metadata.tables['import']  # Получаем объект таблицы Import
+                import_table = self.metadata.tables['import']
+                trans = connection.begin()
                 with open(log_file, 'r') as file:
-                    values_list = []  # Store the values to be inserted
+                    data_to_insert = []
                     for line in file:
                         match = pattern.match(line)
                         if match:
@@ -147,19 +149,24 @@ class DatabaseConnection:
                                 for column, value in data.items():
                                     if column in import_table.columns:
                                         column_obj = import_table.columns[column]
-                                        # Выполнить преобразование типа на основе типа столбца
                                         if isinstance(column_obj.type, Integer):
                                             value = int(value)
                                         elif isinstance(column_obj.type, String):
                                             value = str(value)
-                                        # Добавить преобразованное значение в словарь
+                                        else:
+                                            value = str(value)
+                                        #print(f'Значение {value}')
                                         values[column_obj] = value
-                                values_list.append(values)
+                                data_to_insert.append(values)
+                                print(f'Дата {data_to_insert}')
+                                if len(data_to_insert) >= 1000:  # Bulk insert after 1000 records
+                                    connection.execute(insert(import_table), data_to_insert)
+                                    data_to_insert = []
                             except Exception as e:
                                 print(f"An error occurred: {e}")
-
-                    connection.execute(import_table.insert().values(values_list))
-                    connection.commit()
+                    if data_to_insert:  # Insert the remaining records
+                        connection.execute(insert(import_table), data_to_insert)
+                trans.commit()
     def close(self):
         if self.db_type == 'mongodb':
             self.db.client.close()

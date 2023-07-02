@@ -93,13 +93,13 @@ class DatabaseConnection:
                             Column('id', Integer, primary_key=True),
                             Column('ip_address', Text(length=50), nullable=True),
                             Column('forwarded_for', Text(length=3000), nullable=True),
-                            Column('timestamp', Text(length=1000), nullable=True),
-                            Column('request', Text(length=1000), nullable=True),
+                            Column('timestamp', Text(length=3000), nullable=True),
+                            Column('request', Text(length=3000), nullable=True),
                             Column('status_code', Integer),
                             Column('response_size', Integer),
                             Column('time_taken', Text(length=50), nullable=True),
-                            Column('avb', Text(length=1000), nullable=True),
-                            Column('user_agent', Text(length=1000), nullable=True),
+                            Column('reference', Text(length=3000), nullable=True),
+                            Column('user_agent', Text(length=3000), nullable=True),
                             Column('balancer_worker_name', Text(length=100), nullable=True))
 
         with self.engine.connect() as connection:
@@ -115,7 +115,7 @@ class DatabaseConnection:
                 connection.commit()
 
     def import_log_data(self, log_file):
-        regex = r'^(?P<ip_address>\S+) \((?P<forwarded_for>\S+)\) - - \[(?P<timestamp>[\w:/]+\s[+\-]\d{4})\] "(?P<request>[A-Z]+ \S+ \S+)" (?P<status_code>\d+) (?P<response_size>\d+) (?P<time_taken>\d+) (?P<balancer_worker_name>\d+) "(?P<avb>[^"]*)" "(?P<user_agent>[^"]*)"'
+        regex = r'^(?P<ip_address>\S+) \((?P<forwarded_for>\S+)\) - - \[(?P<timestamp>[\w:/]+\s[+\-]\d{4})\] "(?P<request>[A-Z]+ \S+ \S+)" (?P<status_code>\d+) (?P<response_size>\d+) (?P<time_taken>\d+) (?P<balancer_worker_name>\d+) "(?P<reference>[^"]*)" "(?P<user_agent>[^"]*)"'
         pattern = re.compile(regex)
         if self.db_type == 'mongodb':
             self.collection = self.db['import']
@@ -137,9 +137,10 @@ class DatabaseConnection:
             self.create_import_table()
             with self.engine.connect() as connection:
                 import_table = self.metadata.tables['import']
-                trans = connection.begin()
+                values_batch = []  # List to store batched values
+                batch_size = 1000  # Adjust the batch size as needed
+
                 with open(log_file, 'r') as file:
-                    data_to_insert = []
                     for line in file:
                         match = pattern.match(line)
                         if match:
@@ -153,20 +154,23 @@ class DatabaseConnection:
                                             value = int(value)
                                         elif isinstance(column_obj.type, String):
                                             value = str(value)
-                                        else:
-                                            value = str(value)
-                                        #print(f'Значение {value}')
                                         values[column_obj] = value
-                                data_to_insert.append(values)
-                                print(f'Дата {data_to_insert}')
-                                if len(data_to_insert) >= 1000:  # Bulk insert after 1000 records
-                                    connection.execute(insert(import_table), data_to_insert)
-                                    data_to_insert = []
+
+                                values_batch.append(values)  # Add values to the batch
+
+                                if len(values_batch) >= batch_size:
+                                    # Perform batch insert
+                                    connection.execute(import_table.insert().values(values_batch))
+                                    values_batch = []  # Clear the batch
+
                             except Exception as e:
                                 print(f"An error occurred: {e}")
-                    if data_to_insert:  # Insert the remaining records
-                        connection.execute(insert(import_table), data_to_insert)
-                trans.commit()
+
+                    # Insert remaining values in the batch
+                    if values_batch:
+                        connection.execute(import_table.insert().values(values_batch))
+
+                    connection.commit()
     def close(self):
         if self.db_type == 'mongodb':
             self.db.client.close()

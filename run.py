@@ -53,7 +53,11 @@ analyzer = DataAnalyzer.Analyzer(db_connection, args.db_type)
 
 # Выполнение выбранных операций анализа данных
 if args.ip_user_agent_statistics:
+    logger.info("Executing get_ip_user_agent_statistics method...")
+    start_time = time.time()
     statistics = analyzer.get_ip_user_agent_statistics(5)
+    end_time = time.time()
+    execution_time = end_time - start_time
     for ip_address, referer, balancer_worker_name, user_agent, count in statistics:
         print(f"IP Address: {ip_address}")
         print(f"User-Agent: {user_agent}")
@@ -61,9 +65,15 @@ if args.ip_user_agent_statistics:
         print(f"balancer_worker_name:    {balancer_worker_name}")
         print(f"Count: {count}")
         print("-------------------")
+        
+    logger.info(f"get_ip_user_agent_statistics executed in {execution_time:.2f} seconds")
 
 if args.request_frequency:
+    logger.info("Executing get_request_frequency method...")
+    start_time = time.time()
     request_frequency = analyzer.get_request_frequency(2)
+    end_time = time.time()
+    execution_time = end_time - start_time
     for ip_address, referer, balancer_worker_name, user_agent, frequency in request_frequency:
         print(f"IP Address: {ip_address}")
         print(f"User-Agent: {user_agent}")
@@ -71,6 +81,7 @@ if args.request_frequency:
         print(f"balancer_worker_name:    {balancer_worker_name}")
         print(f"frequency: {frequency}")
         print("-------------------")
+    logger.info(f"get_request_frequency executed in {execution_time:.2f} seconds")
 
 if args.top_user_agents:
     top_user_agents = analyzer.get_top_user_agents(10)

@@ -3,6 +3,7 @@ from sqlalchemy import Boolean, create_engine, MetaData, Table, Column, Integer,
 from sqlalchemy.inspection import inspect
 from sqlalchemy import quoted_name
 from sqlalchemy import insert
+from sqlalchemy import select, func
 from pymongo import MongoClient
 import redis
 import re
@@ -16,6 +17,37 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
+
+
+class Analyzer:
+    def __init__(self, db_connection, db_type):
+        self.db_connection = db_connection
+        self.db_type = db_type
+
+    def execute_query(self, query):
+        if self.db_type == 'mongodb':
+            return self.db_connection.collection.find(query)
+        elif self.db_type == 'redis':
+            r = redis.Redis(host=self.db_connection.db_params['redis']['host'], port=self.db_connection.db_params['redis']['port'])
+            return r.hgetall('import')
+        else:
+            with self.db_connection.engine.connect() as connection:
+                result = connection.execute(query)
+                return result.fetchall()
+            
+    def get_top_browsers(self, n): 
+        import_table = self.db_connection.metadata.tables['import']
+        ip_address = import_table.c.ip_address
+        user_agent = import_table.c.user_agent
+        
+        query = text(f"SELECT {ip_address}, {user_agent}, COUNT(*) AS count "
+                 "FROM import "
+                 "GROUP BY ip_address, user_agent "
+                 "ORDER BY count DESC "
+                 f"LIMIT {n}")
+
+        return self.execute_query(query)
+
 
 class DatabaseConnection:
     def __init__(self, db_type, db_name):
@@ -70,7 +102,7 @@ class DatabaseConnection:
         else:
             connection_string = f"{db_params['driver']}://{db_params['user']}:{db_params['password']}@{db_params['host']}:{db_params['port']}"
 
-        self.engine = create_engine(connection_string)
+        self.engine = create_engine(connection_string,echo = True)
         self.metadata = MetaData()
 
         if self.db_type in ['mysql', 'postgresql']:
@@ -98,7 +130,7 @@ class DatabaseConnection:
                             Column('status_code', Integer),
                             Column('response_size', Integer),
                             Column('time_taken', Text(length=50), nullable=True),
-                            Column('reference', Text(length=3000), nullable=True),
+                            Column('referer', Text(length=3000), nullable=True),
                             Column('user_agent', Text(length=3000), nullable=True),
                             Column('balancer_worker_name', Text(length=100), nullable=True))
 
@@ -115,7 +147,7 @@ class DatabaseConnection:
                 connection.commit()
 
     def import_log_data(self, log_file):
-        regex = r'^(?P<ip_address>\S+) \((?P<forwarded_for>\S+)\) - - \[(?P<timestamp>[\w:/]+\s[+\-]\d{4})\] "(?P<request>[A-Z]+ \S+ \S+)" (?P<status_code>\d+) (?P<response_size>\d+) (?P<time_taken>\d+) (?P<balancer_worker_name>\d+) "(?P<reference>[^"]*)" "(?P<user_agent>[^"]*)"'
+        regex = r'^(?P<ip_address>\S+) \((?P<forwarded_for>\S+)\) - - \[(?P<timestamp>[\w:/]+\s[+\-]\d{4})\] "(?P<request>[A-Z]+ \S+ \S+)" (?P<status_code>\d+) (?P<response_size>\d+) (?P<time_taken>\d+) (?P<balancer_worker_name>\d+) "(?P<referer>[^"]*)" "(?P<user_agent>[^"]*)"'
         pattern = re.compile(regex)
         if self.db_type == 'mongodb':
             self.collection = self.db['import']
@@ -189,4 +221,16 @@ end_time = time.time()  # Запоминаем время окончания в�
 execution_time = end_time - start_time  # Вычисляем время выполнения
 # Выводим информацию о времени выполнения
 logger.info(f"Время выполнения: {execution_time} сек")
+
+
+analyzer = Analyzer(db_connection, db_type)
+top_browsers = analyzer.get_top_browsers(5)
+
+for ip_address, user_agent, count in top_browsers:
+    print(f"IP Address: {ip_address}")
+    print(f"User-Agent: {user_agent}")
+    print(f"Count: {count}")
+    print("-------------------")
+
+
 db_connection.close()

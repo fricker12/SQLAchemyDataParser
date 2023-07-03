@@ -12,7 +12,7 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
 # Создание парсера аргументов командной строки
-parser = argparse.ArgumentParser(description='Data Analysis Program')
+parser = argparse.ArgumentParser(description='Analysis of the log file using databases')
 parser.add_argument('--db_type', type=str, choices=['mysql', 'postgresql', 'sqlite', 'h2', 'mongodb', 'redis'], help='Database type')
 parser.add_argument('--db_name', type=str, help='Database name')
 parser.add_argument('--import_data', action='store_true', help='Import log data')

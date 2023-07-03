@@ -19,7 +19,7 @@ parser.add_argument('--import_data', action='store_true', help='Import log data'
 parser.add_argument('--ip_user_agent_statistics', action='store_true', help='Get IP and User-Agent statistics')
 parser.add_argument('--request_frequency', action='store_true', help='Get request frequency')
 parser.add_argument('--top_user_agents', action='store_true', help='Get top user agents')
-parser.add_argument('--50x_errors', action='store_true', help='Get 50x errors')
+parser.add_argument('--errors_50x', action='store_true', help='Get 50x errors')
 parser.add_argument('--longest_or_shortest_queries', action='store_true', help='Get longest or shortest queries')
 parser.add_argument('--top_requests_to_kth_slash', action='store_true', help='Get top requests to Kth slash')
 parser.add_argument('--count_by_upstream', action='store_true', help='Get count by upstream')
@@ -76,7 +76,7 @@ if args.top_user_agents:
     top_user_agents = analyzer.get_top_user_agents(10)
     # Вывод результатов
 
-if args.50x_errors:
+if args.errors_50x:
     errors = analyzer.get_50x_errors('500', 30)
     # Вывод результатов
 

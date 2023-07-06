@@ -5,4 +5,4 @@ db-sqlite3
 h2
 pymongo
 redis
-qlalchemy
+sqlalchemy

@@ -13,7 +13,9 @@ git clone [https://github.com/fricker12/DataBasesPytonParsingLog](https://github
 cd SQLAchemyDataParser
 
 ```
+
 Then run the script as follows:
+
 ```
 Примеры запуска команд
 
@@ -23,16 +25,17 @@ python run.py --db_type mysql --db_name mydatabase --import_data --ip_user_agent
 
 
 # Получение частоты запросов и получение топ-10 User-Agent
-python run.py --db_type mysql --db_name mydatabase --request_frequency --top_user_agents
+python run.py --db_type mysql --db_name mydatabase --import_data --request_frequency --top_user_agents
 
 # Получение ошибок 50x и получение статистики конверсии по домену
-python run.py --db_type mysql --db_name mydatabase --50x_errors --conversion_statistics
+python run.py --db_type mysql --db_name mydatabase --import_data --50x_errors --conversion_statistics
 
 # Получение самых длинных запросов и получение количества запросов по upstream
-python run.py --db_type mysql --db_name mydatabase --longest_or_shortest_queries --count_by_upstream
+python run.py --db_type mysql --db_name mydatabase --import_data --longest_or_shortest_queries --count_by_upstream
 
 # Получение топ-5 запросов к K-му слэшу и получение самых больших периодов запросов
-python run.py --db_type mysql --db_name mydatabase --top_requests_to_kth_slash --largest_request_periods
+python run.py --db_type mysql --db_name mydatabase --import_data --top_requests_to_kth_slash --largest_request_periods
 
 # Получение исходящих запросов за последние 30 секунд и за последнюю минуту
-python run.py --db_type mysql --db_name mydatabase --outgoing_requests_30s --outgoing_requests_1m
+python run.py --db_type mysql --db_name mydatabase --import_data --outgoing_requests_30s --outgoing_requests_1m
+```
